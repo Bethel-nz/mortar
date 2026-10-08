@@ -1,0 +1,34 @@
+agent: mortar
+
+allow:
+  fs.read: true
+  fs.search_replace: true
+  fs.write: true
+  fs.apply_patch: true
+
+  # Bash reaches real shell semantics over the VFS, so every call waits for a
+  # human. Structured tools above are constrained by the deny rules instead.
+  bash.exec:
+    approval: required
+
+  # Runs real code in a Vercel Sandbox VM. Files sync back through the fs.write
+  # deny rules, and protected paths are never copied into the VM.
+  sandbox.exec:
+    approval: required
+
+deny:
+  fs.rm: true
+  # Bare filesystem.paths is global: any tool whose path field touches these
+  # is denied, including search_replace and apply_patch, not only fs.write.
+  # The same list is derived in permissions.ts and enforced by MongoFs at
+  # path resolution, so bash over the VFS cannot reach these paths either —
+  # quoting, globs, and symlinks do not survive resolution. Command strings
+  # on bash.exec / sandbox.exec are not parsed; those calls require approval,
+  # and commandTouchesProtectedPath is only a signpost for the honest cases.
+  filesystem:
+    paths:
+      - /.vault/**
+      - /.env
+      - /**/*.env
+      # .env.local, .env.production, … usually hold the real secrets.
+      - /**/.env.*
