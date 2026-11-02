@@ -9,7 +9,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^4.0.83",
     "@vercel/sandbox": "^3.5.1",
-    "@vyr-e/latch": "^0.1.0",
+    "@vyr-e/latch": "^0.2.0",
     "@vyr-e/mongo-vfs": "^0.1.1",
     "ai": "^7.0.14",
     "just-bash": "3.6.0",

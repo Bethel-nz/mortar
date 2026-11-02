@@ -13,7 +13,14 @@ code in, and is free to work inside them. One policy file sets the limits.
 
 ## Run
 
-Needs MongoDB on `127.0.0.1:27017`.
+Needs MongoDB on `127.0.0.1:27017`, or any MongoDB URI (a free MongoDB Atlas cluster works).
+
+## Footprint
+
+The host process only runs the model loop, the terminal UI, and the file layer, so a small VPS is
+enough. Code execution happens in the Vercel Sandbox microVM, not on the host. MongoDB stores the
+workspace's text files, not build outputs or binaries. Measured host memory and disk numbers are
+not recorded yet.
 
 ```sh
 bun install

@@ -7,7 +7,7 @@
       "dependencies": {
         "@ai-sdk/openai": "^4.0.83",
         "@vercel/sandbox": "^3.5.1",
-        "@vyr-e/latch": "^0.1.0",
+        "@vyr-e/latch": "^0.2.0",
         "@vyr-e/mongo-vfs": "^0.1.1",
         "ai": "^7.0.14",
         "just-bash": "3.6.0",
@@ -58,7 +58,7 @@
 
     "@vercel/sandbox": ["@vercel/sandbox@3.5.1", "", { "dependencies": { "@vercel/detect-agent": "1.2.5", "@vercel/oidc": "3.2.0", "@workflow/serde": "4.1.0-beta.2", "async-retry": "1.3.3", "jose": "6.2.3", "jsonlines": "0.1.1", "lru-cache": "^10.4.3", "ms": "2.1.3", "picocolors": "^1.1.1", "tar-stream": "3.1.7", "undici": "^7.27.1", "xdg-app-paths": "5.1.0", "zod": "^4.1.1" } }, "sha512-VHItQtcv4FkSXET29b088p87MNPAIhRscF3ifrup2KkC8ix4hy4NpgCO9F3GI4yOsztgGtuV7bDx29Iufun2hQ=="],
 
-    "@vyr-e/latch": ["@vyr-e/latch@0.1.0", "", { "dependencies": { "yaml": "^2.6.0" }, "bin": { "latch": "dist/cli.js" } }, "sha512-lpqK1wQRUgvqrMXV3e4Q3Z2OBrJwOeW3DcDEY8lyEo8i5NVgT6gJAbikMN/OvmpLzD1tj4lKZi/LFhdu+FdGaw=="],
+    "@vyr-e/latch": ["@vyr-e/latch@0.2.0", "", { "dependencies": { "yaml": "^2.6.0" }, "bin": { "latch": "dist/cli.js" } }, "sha512-A7wwO2z4UESYqPdJ00JkwtENTspGgj5PhLqy2pPhGC3cQtj7Tqv4BxC9jthYR95FImE7D2ESfA30UPe6/dlFOw=="],
 
     "@vyr-e/mongo-vfs": ["@vyr-e/mongo-vfs@0.1.1", "", { "dependencies": { "diff": "^8.0.2", "just-bash": "3.6.0", "mongodb": "^6.20.0" } }, "sha512-eaZvkXBxpXvwOh1J3G2KVyVJuqpPXTrJN6LPP9ZwKFYer4lzlhGBwnPO2yOfruG7UngCefKn4GP+eSlmwZ20eg=="],
 

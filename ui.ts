@@ -22,6 +22,18 @@ export const c = {
 
 const out = (text: string) => process.stdout.write(text);
 
+/**
+ * Model and tool text must not drive the terminal. A stray \r or escape could
+ * erase or hide part of an approval prompt, and bidi overrides can reorder it,
+ * so control characters are shown as \xNN or \uNNNN instead. Newlines and tabs pass.
+ */
+export function printable(text: string): string {
+  return text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f‪-‮⁦-⁩]/g, (ch) => {
+    const code = ch.charCodeAt(0);
+    return code < 0x100 ? `\\x${code.toString(16).padStart(2, "0")}` : `\\u${code.toString(16).padStart(4, "0")}`;
+  });
+}
+
 export const PROMPT = `${c.magenta("›")} `;
 
 export function banner(): void {
@@ -66,7 +78,7 @@ export class TextRenderer {
   private blank = false;
 
   write(delta: string): void {
-    const parts = (this.line + delta).split("\n");
+    const parts = (this.line + printable(delta)).split("\n");
     this.line = parts.pop() ?? "";
     for (const part of parts) this.emit(part);
   }
@@ -119,8 +131,11 @@ type ToolInput = Record<string, unknown>;
 /** The one-line headline for a call: tool name plus its key argument. */
 export function describeCall(tool: string, input: ToolInput): string {
   const arg = String(input.command ?? input.path ?? "");
-  const cwd = input.cwd && input.cwd !== "/" ? c.dim(` in ${input.cwd}`) : "";
-  return `${c.bold(tool)}  ${oneLine(arg, 70)}${cwd}`;
+  return `${c.bold(tool)}  ${oneLine(arg, 70)}${describeCwd(input)}`;
+}
+
+function describeCwd(input: ToolInput): string {
+  return input.cwd && input.cwd !== "/" ? c.dim(` in ${printable(String(input.cwd))}`) : "";
 }
 
 export function toolResult(tool: string, input: ToolInput, output: unknown): void {
@@ -130,15 +145,24 @@ export function toolResult(tool: string, input: ToolInput, output: unknown): voi
 }
 
 export function toolError(tool: string, input: ToolInput, error: unknown): void {
-  const message = (error instanceof Error ? error.message : String(error)).split("\n")[0];
+  const message = printable(error instanceof Error ? error.message : String(error)).split("\n")[0];
   const denied = error instanceof Error && /Latch/.test(error.name);
   const mark = denied ? c.yellow("⊘") : c.red("✗");
   out(`  ${mark} ${describeCall(tool, input)}\n    ${c.dim("│")} ${denied ? c.yellow(message) : c.red(message)}\n`);
 }
 
-/** The y/N question latch asks before an approval-gated call. */
+/**
+ * Prints the call latch wants approved, then returns the y/N question. The
+ * approval is the only wall in front of bash and run, so the human sees the
+ * whole command, never a truncated one. The command goes out before the
+ * question so readline only ever redraws the one-line prompt.
+ */
 export function approvalQuestion(tool: string, input: ToolInput): string {
-  return `  ${c.yellow("?")} ${describeCall(tool, input)}  ${c.yellow("allow?")} ${c.dim("[y/N]")} `;
+  out(`  ${c.yellow("?")} ${c.bold(tool)}${describeCwd(input)}\n`);
+  for (const line of printable(String(input.command ?? input.path ?? "")).split("\n")) {
+    out(`    ${c.dim("│")} ${line}\n`);
+  }
+  return `    ${c.yellow("allow?")} ${c.dim("[y/N]")} `;
 }
 
 /** One line per @tag under the user's message: what was attached, refused, or not found. */
@@ -204,6 +228,6 @@ function tail(text: string, n: number): string[] {
 }
 
 function oneLine(text: string, max: number): string {
-  const flat = text.replace(/\s*\n\s*/g, " ⏎ ");
+  const flat = printable(text).replace(/\s*\n\s*/g, " ⏎ ");
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
