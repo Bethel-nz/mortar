@@ -16,8 +16,15 @@ allow:
   sandbox.exec:
     approval: required
 
+  # Deleting or renaming workspace paths is deliberate surgery on the project,
+  # never a side effect of a run (a VM rm is undone on the next push). Both
+  # wait for a human like bash and run do.
+  fs.rm:
+    approval: required
+  fs.mv:
+    approval: required
+
 deny:
-  fs.rm: true
   # Bare filesystem.paths is global: any tool whose path field touches these
   # is denied, including search_replace and apply_patch, not only fs.write.
   # The same list is derived in permissions.ts and enforced by MongoFs at

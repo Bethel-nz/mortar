@@ -2,7 +2,12 @@ import { type ApprovalHandler, createGate, loadPolicy, pathMatches, renderPrompt
 
 const { policy } = loadPolicy(new URL("./latch.yaml", import.meta.url).pathname);
 
-const toolForAction: Record<string, string> = { "sandbox.exec": "run", "bash.exec": "bash" };
+const toolForAction: Record<string, string> = {
+  "sandbox.exec": "run",
+  "bash.exec": "bash",
+  "fs.rm": "delete_file",
+  "fs.mv": "move_file",
+};
 
 /**
  * Every path pattern any deny rule names — the union, deliberately coarser

@@ -42,15 +42,31 @@ const turn = {
 };
 
 let asking = false;
+/** The running turn's abort; Ctrl-C fires it instead of killing the process. */
+let activeTurn: AbortController | null = null;
 
 async function onApproval({ action, input }: { action: string; input: unknown }): Promise<boolean> {
   if (process.env.AUTO_APPROVE) return true;
   asking = true;
   spinner.stop();
   turn.beginTools();
-  const answer = await rl.question(ui.approvalQuestion(toolName(action), input as Record<string, unknown>));
-  asking = false;
-  return answer.trim().toLowerCase() === "y";
+  // Ctrl-C during the prompt aborts the turn; the race resolves the question
+  // as a decline rather than leaving it pending forever.
+  let onAbort: () => void = () => {};
+  const aborted = new Promise<string>((resolve) => {
+    onAbort = () => resolve("");
+    activeTurn?.signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    const answer = await Promise.race([
+      rl.question(ui.approvalQuestion(toolName(action), input as Record<string, unknown>)),
+      aborted,
+    ]);
+    return answer.trim().toLowerCase() === "y";
+  } finally {
+    activeTurn?.signal.removeEventListener("abort", onAbort);
+    asking = false;
+  }
 }
 
 const { gate, canRead, canWrite } = createPermissions(onApproval);
@@ -72,6 +88,7 @@ const system = [
   `Prefer search_replace over write_file for edits — it sends only the changed bytes.`,
   `bash is a simulated shell over the VFS: good for ls, cat, grep, but it cannot run programs. Use run to execute code, install packages, or run tests in a real Linux VM; its file changes land back in the workspace.`,
   `Inside run, the workspace root is the working directory, not /. Use relative paths there: python3 hello/main.py, not python3 /hello/main.py.`,
+  `rm and mv inside run only touch the VM copy: the next run restores whatever the workspace still holds. To delete or rename workspace files for real, call delete_file or move_file — they go straight to the workspace and ask the human for approval.`,
   `The user can tag files as @path. Tagged files arrive inline in <tagged-files> blocks, current as of that message, so don't re-read them unless they may have changed.`,
   "",
   permissionsPrompt,
@@ -79,13 +96,24 @@ const system = [
 
 const messages: ModelMessage[] = [];
 const rl = createInterface({ input: process.stdin, output: process.stdout });
-attachMentionMenu(rl, (partial) => suggestTags(tagSource, partial));
+attachMentionMenu(rl, (partial) => suggestTags(tagSource, partial), () => !asking);
 
 let stdinClosed = false;
 let busy = false;
 rl.on("close", () => {
   stdinClosed = true;
   setImmediate(() => busy || void shutdown());
+});
+// Taking over SIGINT means readline's default (exit on empty line) is ours to
+// reimplement: abort the running turn if there is one, otherwise behave like
+// the default — clear a half-typed line, exit on an empty one.
+rl.on("SIGINT", () => {
+  if (activeTurn) {
+    activeTurn.abort();
+    return;
+  }
+  if ((rl as { line?: string }).line?.length) rl.write(null, { ctrl: true, name: "u" });
+  else void shutdown();
 });
 
 ui.banner();
@@ -108,6 +136,8 @@ for (;;) {
 await shutdown();
 
 async function agentTurn(input: string): Promise<void> {
+  const controller = new AbortController();
+  activeTurn = controller;
   let printed = false;
   try {
     const { content, tags } = await expandTags(input, tagSource);
@@ -122,6 +152,7 @@ async function agentTurn(input: string): Promise<void> {
       messages,
       tools,
       stopWhen: stepCountIs(MAX_STEPS),
+      abortSignal: controller.signal,
       providerOptions: { openai: { forceReasoning: true, reasoningEffort: "medium", systemMessageMode: "system" } },
       onError: () => {},
     });
@@ -147,19 +178,32 @@ async function agentTurn(input: string): Promise<void> {
         spinner.stop();
         printed = true;
         turn.end();
+        if (controller.signal.aborted) break; // reported as (cancelled) below
         ui.failure(firstLine(part.error));
       }
     }
     spinner.stop();
     turn.end();
-    messages.push(...(await result.responseMessages));
-    if (!printed) ui.notice("(the model returned an empty response — send it again)");
+    if (controller.signal.aborted) cancelled();
+    else {
+      messages.push(...(await result.responseMessages));
+      if (!printed) ui.notice("(the model returned an empty response — send it again)");
+    }
   } catch (error) {
     spinner.stop();
     turn.end();
-    if (!printed) ui.failure(firstLine(error));
+    if (controller.signal.aborted) cancelled();
+    else if (!printed) ui.failure(firstLine(error));
+  } finally {
+    activeTurn = null;
+    process.stdout.write("\n");
   }
-  process.stdout.write("\n");
+}
+
+/** Keeps message alternation intact after a Ctrl-C: the user message stays, the model's reply is recorded as cut short. */
+function cancelled(): void {
+  messages.push({ role: "assistant", content: "(cancelled)" });
+  ui.notice("(cancelled)");
 }
 
 async function shellCommand(typed: string): Promise<void> {

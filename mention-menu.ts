@@ -24,7 +24,11 @@ type Line = Interface & {
   write(data: string | null, key?: Key): void;
 };
 
-export function attachMentionMenu(rl: Interface, suggest: (partial: string) => string[]): void {
+export function attachMentionMenu(
+  rl: Interface,
+  suggest: (partial: string) => string[],
+  isActive: () => boolean = () => true,
+): void {
   const input = process.stdin;
   if (!input.isTTY || !process.stdout.isTTY) return;
   const line = rl as Line;
@@ -81,6 +85,15 @@ export function attachMentionMenu(rl: Interface, suggest: (partial: string) => s
 
   input.removeAllListeners("keypress");
   input.on("keypress", (s: string, key: Key = {}) => {
+    // While another question owns the line (an approval prompt), the menu is
+    // inert: every key goes straight to readline, so `@` and arrows cannot
+    // hijack the y/N answer.
+    if (!isActive()) {
+      clear();
+      items = [];
+      for (const listener of readlineListeners) listener.call(input, s, key);
+      return;
+    }
     if (items.length) {
       if (key.name === "up" || key.name === "down") {
         selected = (selected + (key.name === "up" ? -1 : 1) + items.length) % items.length;

@@ -83,6 +83,33 @@ test("runs in a workspace subdirectory", async () => {
   expect(result.written).toEqual(["/src/here.txt"]);
 });
 
+test("cannot cwd its way out of the workspace root", async () => {
+  const escape = await runner.run("pwd", { cwd: "/../../.." });
+  expect(escape.stdout.trim()).toBe("/vercel/workspace");
+  const relative = await runner.run("pwd", { cwd: "src/.." });
+  expect(relative.stdout.trim()).toBe("/vercel/workspace");
+});
+
+test("syncs lockfiles over 1 MiB and reports other oversized files", async () => {
+  // 1.5 MiB of lockfile: over the ordinary per-file limit, under the lockfile one.
+  const lock = "x".repeat(1024 * 1024 + 512);
+  await fs.writeFile("/package-lock.json", lock);
+  const seen = await runner.run("wc -c < package-lock.json");
+  expect(seen.stdout.trim()).toBe(String(lock.length));
+  expect(seen.oversized).toEqual([]);
+
+  // A regular file past 1 MiB is reported, not written back — and since the
+  // mirror must match the VFS, the next run cleans it out of the VM.
+  const blob = await runner.run("head -c 1048576 /dev/zero > data.bin");
+  expect(blob.written).toEqual([]);
+  expect(blob.oversized).toEqual(["/data.bin"]);
+  expect(await fs.exists("/data.bin")).toBe(false);
+
+  const cleanup = await runner.run("test -e data.bin && echo present || echo gone");
+  expect(cleanup.stdout.trim()).toBe("gone");
+  await fs.rm("/package-lock.json");
+});
+
 test("keeps dependency dirs in the VM", async () => {
   const result = await runner.run("mkdir -p node_modules/pkg && echo x > node_modules/pkg/index.js");
   expect(result.written).toEqual([]);
